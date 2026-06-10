@@ -217,24 +217,24 @@ async def show_stats(message: Message):
     await update_last_active(user_id)
     if user_id == ADMIN_ID:
         stats = await get_team_stats()
-        text = (f"{format_emoji('stats')}\n\n"
-                f"👥 {stats['total']}\n"
-                f"🎭 {stats['streamers']}\n"
-                f"🚀 {stats['traffers']}\n"
-                f"🛡️ {stats['moders']}\n"
-                f"💰 {stats['total_profit']} руб.\n"
-                f"📅 {stats['active_week']}")
+        text = (f"{format_emoji('stats')} <b>Статистика CashFlow Team</b>\n\n"
+                f"👥 Всего участников: {stats['total']}\n"
+                f"🎭 Стримерш: {stats['streamers']}\n"
+                f"🚀 Траферов: {stats['traffers']}\n"
+                f"🛡️ Модераторов: {stats['moders']}\n"
+                f"💰 Общий профит: {stats['total_profit']} руб.\n"
+                f"📅 Активных за неделю: {stats['active_week']}")
     else:
         role = user['role']
         profit = user['profit']
         recruited = user['recruited_streamers']
         streams = user['streams_count']
-        text = (f"{format_emoji('stats')}\n\n"
-                f"💰 {profit} руб.\n")
+        text = (f"{format_emoji('stats')} <b>Твоя статистика</b>\n\n"
+                f"💰 Профит: {profit} руб.\n")
         if role == "трафер":
-            text += f"🚀 {recruited}\n"
+            text += f"🚀 Приведено стримерш: {recruited}\n"
         elif role == "стримерша":
-            text += f"🎥 {streams}\n"
+            text += f"🎥 Количество стримов: {streams}\n"
     await message.answer(text, parse_mode=ParseMode.HTML)
 
 # ---------- НАСТРОЙКИ ----------
