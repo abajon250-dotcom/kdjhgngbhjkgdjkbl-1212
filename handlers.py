@@ -4,6 +4,7 @@ from aiogram.filters import CommandStart
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 from aiogram.enums import ParseMode
+from datetime import datetime
 
 from config import ADMIN_ID
 from db import *
@@ -158,7 +159,9 @@ async def show_profile(message: Message):
     profit = user['profit']
     recruited = user['recruited_streamers']
     streams = user['streams_count']
-    join_date = user['join_date'][:10]
+    # Исправление: datetime -> строка
+    join_date = user['join_date'].isoformat()[:10] if isinstance(user['join_date'], datetime) else str(
+        user['join_date'])[:10]
     age = user['age']
 
     text = f"{format_emoji('profile')}\n\n"

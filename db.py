@@ -50,7 +50,6 @@ async def init_db():
                 admin_id BIGINT
             )
         """)
-        # Настройки по умолчанию
         await conn.execute("""
             INSERT INTO settings (key, value) VALUES ('welcome_gif_file_id', '')
             ON CONFLICT (key) DO NOTHING
@@ -121,7 +120,7 @@ async def get_active_users_last_days(days: int = 7) -> int:
     async with db_pool.acquire() as conn:
         row = await conn.fetchrow("""
             SELECT COUNT(*) FROM users 
-            WHERE approved = TRUE AND last_active >= NOW() - INTERVAL '$1 days'
+            WHERE approved = TRUE AND last_active >= NOW() - ($1 || ' days')::interval
         """, days)
         return row[0] if row else 0
 
