@@ -1,5 +1,5 @@
 import asyncpg
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 from config import DATABASE_URL
 
@@ -50,7 +50,6 @@ async def init_db():
                 admin_id BIGINT
             )
         """)
-        # Настройки по умолчанию
         await conn.execute("""
             INSERT INTO settings (key, value) VALUES ('welcome_gif_file_id', '')
             ON CONFLICT (key) DO NOTHING
@@ -118,12 +117,13 @@ async def get_all_users(only_approved: bool = True) -> List[Dict[str, Any]]:
         return [dict(row) for row in rows]
 
 async def get_active_users_last_days(days: int = 7) -> int:
+    """Возвращает количество активных пользователей за последние N дней."""
     async with db_pool.acquire() as conn:
-        # Передаём интервал как строку
+        threshold = datetime.now() - timedelta(days=days)
         row = await conn.fetchrow("""
             SELECT COUNT(*) FROM users 
-            WHERE approved = TRUE AND last_active >= NOW() - $1::interval
-        """, f'{days} days')
+            WHERE approved = TRUE AND last_active >= $1
+        """, threshold)
         return row[0] if row else 0
 
 async def save_pending_app(user_id: int, age: str, hours: str, experience: str) -> None:
