@@ -1,10 +1,9 @@
-import asyncio
+from datetime import datetime
 from aiogram import Router, F, Bot
 from aiogram.filters import CommandStart
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 from aiogram.enums import ParseMode
-from datetime import datetime
 
 from config import ADMIN_ID
 from db import *
@@ -14,11 +13,16 @@ from emoji_config import format_emoji
 
 router = Router()
 
-
 def get_display_name(user_data: dict) -> str:
-    return user_data.get('display_name') or user_data.get('username', f"user_{user_data['user_id']}")
+    """Возвращает display_name, если есть, иначе username или ID"""
+    if user_data.get('display_name'):
+        return user_data['display_name']
+    username = user_data.get('username')
+    if username:
+        return username
+    return str(user_data['user_id'])
 
-
+# ---------- СТАРТ ----------
 @router.message(CommandStart())
 async def cmd_start(message: Message):
     user_id = message.from_user.id
@@ -35,7 +39,7 @@ async def cmd_start(message: Message):
             parse_mode=ParseMode.HTML
         )
 
-
+# ---------- ПОДАЧА ЗАЯВКИ ----------
 @router.callback_query(lambda c: c.data == "start_apply")
 async def callback_apply(callback: CallbackQuery, state: FSMContext):
     await callback.message.delete()
@@ -46,11 +50,8 @@ async def callback_apply(callback: CallbackQuery, state: FSMContext):
         await callback.answer()
         return
     await state.set_state(ApplyForm.age)
-    await callback.message.answer(
-        f"{format_emoji('apply')} Заявка в CashFlow Team\nСколько тебе лет? (только число, от 18)",
-        parse_mode=ParseMode.HTML)
+    await callback.message.answer(f"{format_emoji('apply')} Заявка в CashFlow Team\nСколько тебе лет? (только число, от 18)", parse_mode=ParseMode.HTML)
     await callback.answer()
-
 
 @router.message(ApplyForm.age)
 async def process_age(message: Message, state: FSMContext):
@@ -65,14 +66,11 @@ async def process_age(message: Message, state: FSMContext):
     await state.set_state(ApplyForm.hours)
     await message.answer("Сколько времени готов уделять работе в день? (например: 3-4 часа)", parse_mode=ParseMode.HTML)
 
-
 @router.message(ApplyForm.hours)
 async def process_hours(message: Message, state: FSMContext):
     await state.update_data(hours=message.text)
     await state.set_state(ApplyForm.experience)
-    await message.answer("Был ли опыт в стримах/накрутке/командной работе? Расскажи подробнее.",
-                         parse_mode=ParseMode.HTML)
-
+    await message.answer("Был ли опыт в стримах/накрутке/командной работе? Расскажи подробнее.", parse_mode=ParseMode.HTML)
 
 @router.message(ApplyForm.experience)
 async def process_experience(message: Message, state: FSMContext, bot: Bot):
@@ -99,7 +97,7 @@ async def process_experience(message: Message, state: FSMContext, bot: Bot):
     await message.answer("✅ Заявка отправлена! Ожидай решения.", parse_mode=ParseMode.HTML)
     await state.clear()
 
-
+# ---------- ОДОБРЕНИЕ / ОТКЛОНЕНИЕ ----------
 @router.callback_query(lambda c: c.data.startswith("approve_"))
 async def approve_application(callback: CallbackQuery, bot: Bot):
     user_id = int(callback.data.split("_")[1])
@@ -128,7 +126,6 @@ async def approve_application(callback: CallbackQuery, bot: Bot):
     await callback.message.edit_text(f"{format_emoji('approved')} Заявка принята!", parse_mode=ParseMode.HTML)
     await callback.answer()
 
-
 @router.callback_query(lambda c: c.data.startswith("reject_"))
 async def reject_application(callback: CallbackQuery, bot: Bot):
     user_id = int(callback.data.split("_")[1])
@@ -137,15 +134,13 @@ async def reject_application(callback: CallbackQuery, bot: Bot):
         return
     await delete_pending_app(user_id)
     try:
-        await bot.send_message(user_id,
-                               f"{format_emoji('rejected')} К сожалению, твоя заявка отклонена. Спасибо за интерес!",
-                               parse_mode=ParseMode.HTML)
+        await bot.send_message(user_id, f"{format_emoji('rejected')} К сожалению, твоя заявка отклонена. Спасибо за интерес!", parse_mode=ParseMode.HTML)
     except:
         pass
     await callback.message.edit_text(f"{format_emoji('rejected')} Заявка отклонена.", parse_mode=ParseMode.HTML)
     await callback.answer()
 
-
+# ---------- ПРОФИЛЬ (только эмодзи и значения) ----------
 @router.message(F.text == "🧸 Профиль")
 async def show_profile(message: Message):
     user_id = message.from_user.id
@@ -154,14 +149,17 @@ async def show_profile(message: Message):
         await message.answer("Ты не в команде. Напиши /start", parse_mode=ParseMode.HTML)
         return
     await update_last_active(user_id)
-    display = user.get('display_name') or user.get('username', str(user_id))
+    display = get_display_name(user)
     role = user['role']
     profit = user['profit']
     recruited = user['recruited_streamers']
     streams = user['streams_count']
-    # Исправление: datetime -> строка
-    join_date = user['join_date'].isoformat()[:10] if isinstance(user['join_date'], datetime) else str(
-        user['join_date'])[:10]
+    # Преобразование даты
+    join_date_raw = user['join_date']
+    if isinstance(join_date_raw, datetime):
+        join_date = join_date_raw.strftime("%Y-%m-%d")
+    else:
+        join_date = str(join_date_raw)[:10] if join_date_raw else "—"
     age = user['age']
 
     text = f"{format_emoji('profile')}\n\n"
@@ -183,7 +181,7 @@ async def show_profile(message: Message):
     else:
         await message.answer(text, parse_mode=ParseMode.HTML)
 
-
+# ---------- ВЫБОР ПОЛЬЗОВАТЕЛЯ ДЛЯ РЕДАКТИРОВАНИЯ (АДМИН) ----------
 @router.callback_query(lambda c: c.data == "admin_edit_any_profile")
 async def admin_edit_any_profile(callback: CallbackQuery):
     if callback.from_user.id != ADMIN_ID:
@@ -195,24 +193,20 @@ async def admin_edit_any_profile(callback: CallbackQuery):
         return
     buttons = []
     for u in users:
-        name = u.get('display_name') or u.get('username', str(u['user_id']))
-        buttons.append(
-            [InlineKeyboardButton(text=f"{name} (@{u['username']})", callback_data=f"admin_edit_user_{u['user_id']}")])
+        name = get_display_name(u)
+        buttons.append([InlineKeyboardButton(text=f"{name} (@{u['username']})", callback_data=f"admin_edit_user_{u['user_id']}")])
     buttons.append([InlineKeyboardButton(text="🔙 Назад", callback_data="admin_close")])
     markup = InlineKeyboardMarkup(inline_keyboard=buttons)
-    await callback.message.edit_text("Выбери участника для редактирования:", reply_markup=markup,
-                                     parse_mode=ParseMode.HTML)
+    await callback.message.edit_text("Выбери участника для редактирования:", reply_markup=markup, parse_mode=ParseMode.HTML)
     await callback.answer()
-
 
 @router.callback_query(lambda c: c.data.startswith("admin_edit_user_"))
 async def edit_selected_user(callback: CallbackQuery):
     user_id = int(callback.data.split("_")[-1])
-    await callback.message.edit_text(f"Редактирование пользователя ID {user_id}",
-                                     reply_markup=edit_user_buttons(user_id), parse_mode=ParseMode.HTML)
+    await callback.message.edit_text(f"Редактирование пользователя ID {user_id}", reply_markup=edit_user_buttons(user_id), parse_mode=ParseMode.HTML)
     await callback.answer()
 
-
+# ---------- СТАТИСТИКА ----------
 @router.message(F.text == "📊 Статистика")
 async def show_stats(message: Message):
     user_id = message.from_user.id
@@ -224,11 +218,11 @@ async def show_stats(message: Message):
     if user_id == ADMIN_ID:
         stats = await get_team_stats()
         text = (f"{format_emoji('stats')}\n\n"
-                f"{format_emoji('total_users')} {stats['total']}\n"
-                f"{format_emoji('role_streamer')} {stats['streamers']}\n"
-                f"{format_emoji('role_traffer')} {stats['traffers']}\n"
-                f"{format_emoji('role_moder')} {stats['moders']}\n"
-                f"{format_emoji('profit')} {stats['total_profit']} руб.\n"
+                f"👥 {stats['total']}\n"
+                f"🎭 {stats['streamers']}\n"
+                f"🚀 {stats['traffers']}\n"
+                f"🛡️ {stats['moders']}\n"
+                f"💰 {stats['total_profit']} руб.\n"
                 f"📅 {stats['active_week']}")
     else:
         role = user['role']
@@ -236,14 +230,14 @@ async def show_stats(message: Message):
         recruited = user['recruited_streamers']
         streams = user['streams_count']
         text = (f"{format_emoji('stats')}\n\n"
-                f"{format_emoji('profit')} {profit} руб.\n")
+                f"💰 {profit} руб.\n")
         if role == "трафер":
-            text += f"{format_emoji('role_traffer')} {recruited}\n"
+            text += f"🚀 {recruited}\n"
         elif role == "стримерша":
-            text += f"{format_emoji('role_streamer')} {streams}\n"
+            text += f"🎥 {streams}\n"
     await message.answer(text, parse_mode=ParseMode.HTML)
 
-
+# ---------- НАСТРОЙКИ ----------
 @router.message(F.text == "⚙️ Настройки")
 async def settings_menu(message: Message):
     user_id = message.from_user.id
@@ -253,23 +247,17 @@ async def settings_menu(message: Message):
         return
     await update_last_active(user_id)
     markup = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=f"{format_emoji('edit_name')} Изменить отображаемое имя",
-                              callback_data="settings_change_name")],
-        [InlineKeyboardButton(text=f"{format_emoji('edit_avatar')} Установить аватарку",
-                              callback_data="settings_change_avatar")],
-        [InlineKeyboardButton(text=f"{format_emoji('edit_notify')} Включить/отключить уведомления",
-                              callback_data="settings_toggle_notify")]
+        [InlineKeyboardButton(text="✏️ Изменить отображаемое имя", callback_data="settings_change_name")],
+        [InlineKeyboardButton(text="🖼️ Установить аватарку", callback_data="settings_change_avatar")],
+        [InlineKeyboardButton(text="🔔 Включить/отключить уведомления", callback_data="settings_toggle_notify")]
     ])
-    await message.answer(f"{format_emoji('settings')} Настройки профиля:", reply_markup=markup,
-                         parse_mode=ParseMode.HTML)
-
+    await message.answer(f"{format_emoji('settings')} Настройки профиля:", reply_markup=markup, parse_mode=ParseMode.HTML)
 
 @router.callback_query(lambda c: c.data == "settings_change_name")
 async def change_name_start(callback: CallbackQuery, state: FSMContext):
     await state.set_state(UserSettings.change_name)
     await callback.message.answer("Введите новое отображаемое имя:", parse_mode=ParseMode.HTML)
     await callback.answer()
-
 
 @router.message(UserSettings.change_name)
 async def change_name_process(message: Message, state: FSMContext):
@@ -281,13 +269,11 @@ async def change_name_process(message: Message, state: FSMContext):
     await message.answer(f"✅ Имя изменено на {new_name}", parse_mode=ParseMode.HTML)
     await state.clear()
 
-
 @router.callback_query(lambda c: c.data == "settings_change_avatar")
 async def change_avatar_start(callback: CallbackQuery, state: FSMContext):
     await state.set_state(UserSettings.change_avatar)
     await callback.message.answer("Отправьте фото для аватарки:", parse_mode=ParseMode.HTML)
     await callback.answer()
-
 
 @router.message(UserSettings.change_avatar, F.photo)
 async def change_avatar_process(message: Message, state: FSMContext):
@@ -296,11 +282,9 @@ async def change_avatar_process(message: Message, state: FSMContext):
     await message.answer("✅ Аватарка сохранена!", parse_mode=ParseMode.HTML)
     await state.clear()
 
-
 @router.message(UserSettings.change_avatar)
 async def change_avatar_invalid(message: Message):
     await message.answer("Пожалуйста, отправьте фото.", parse_mode=ParseMode.HTML)
-
 
 @router.callback_query(lambda c: c.data == "settings_toggle_notify")
 async def toggle_notifications(callback: CallbackQuery):
@@ -312,10 +296,10 @@ async def toggle_notifications(callback: CallbackQuery):
     new_setting = not user['notification_settings']
     await update_user(user_id, notification_settings=new_setting)
     status = "включены" if new_setting else "выключены"
-    await callback.message.answer(f"{format_emoji('edit_notify')} Уведомления {status}.", parse_mode=ParseMode.HTML)
+    await callback.message.answer(f"🔔 Уведомления {status}.", parse_mode=ParseMode.HTML)
     await callback.answer()
 
-
+# ---------- ЧАТ КОМАНДЫ ----------
 @router.message(F.text == "💬 Чат команды")
 async def chat_link(message: Message):
     link = await get_setting("chat_link")
@@ -324,11 +308,10 @@ async def chat_link(message: Message):
     else:
         await message.answer("Ссылка на чат ещё не установлена.", parse_mode=ParseMode.HTML)
 
-
+# ---------- АДМИН-ПАНЕЛЬ ----------
 @router.message(F.text == "👑 Админ-панель")
 async def admin_panel(message: Message):
     if message.from_user.id != ADMIN_ID:
         await message.answer("Нет доступа.", parse_mode=ParseMode.HTML)
         return
-    await message.answer(f"{format_emoji('admin')} Панель управления CashFlow Team:", reply_markup=admin_panel_buttons,
-                         parse_mode=ParseMode.HTML)
+    await message.answer(f"{format_emoji('admin')} Панель управления CashFlow Team:", reply_markup=admin_panel_buttons, parse_mode=ParseMode.HTML)
