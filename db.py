@@ -3,14 +3,12 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 from config import DATABASE_URL
 
-# Пул соединений (будет инициализирован в main)
 db_pool = None
 
 async def init_db():
     global db_pool
     db_pool = await asyncpg.create_pool(DATABASE_URL)
     async with db_pool.acquire() as conn:
-        # Таблица users
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 user_id BIGINT PRIMARY KEY,
@@ -28,7 +26,6 @@ async def init_db():
                 notification_settings BOOLEAN DEFAULT TRUE
             )
         """)
-        # Таблица pending_app
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS pending_app (
                 user_id BIGINT PRIMARY KEY,
@@ -37,14 +34,12 @@ async def init_db():
                 experience TEXT
             )
         """)
-        # Таблица settings
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
                 value TEXT
             )
         """)
-        # Таблица profit_logs
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS profit_logs (
                 id SERIAL PRIMARY KEY,
@@ -76,9 +71,7 @@ async def init_db():
 async def get_user(user_id: int) -> Optional[Dict[str, Any]]:
     async with db_pool.acquire() as conn:
         row = await conn.fetchrow("SELECT * FROM users WHERE user_id = $1", user_id)
-        if row:
-            return dict(row)
-    return None
+        return dict(row) if row else None
 
 async def create_user(user_id: int, username: str, age: int, role: str = "новичок") -> None:
     async with db_pool.acquire() as conn:
